@@ -206,41 +206,41 @@ def generate_random_value_ranges(capabilities):
             random_prop = prop.copy()
             prop_name = prop.get('property_name', '').lower()
             
-            # 温度相关属性（如SetTemperature）
+            # Temperature-related properties (such as SetTemperature)
             if 'temperature' in prop_name:
-                # 生成合理的温度范围，例如 20.0 到 80.0 °C
-                min_temp = round(random.uniform(20.0, 40.0), 2)
-                max_temp = round(random.uniform(60.0, 80.0), 2)
-                # 确保最小值小于最大值
+                # Generate a reasonable temperature range, such as 0.0 to 100.0 °C.
+                min_temp = round(random.uniform(0.0, 50.0), 2)
+                max_temp = round(random.uniform(50.0, 100.0), 2)
+                # Ensure the minimum value is less than the maximum value
                 if min_temp > max_temp:
                     min_temp, max_temp = max_temp, min_temp
                 random_prop['random_value_min'] = min_temp
                 random_prop['random_value_max'] = max_temp
             
-            # 时间相关属性
+            # Time-related attributes
             elif any(time_keyword in prop_name for time_keyword in ['time', 'duration']):
-                # 对于有明确范围的情况
+                # For situations with clearly defined scope
                 if prop.get('valueMin') and prop.get('valueMax'):
                     try:
                         original_min = int(prop['valueMin'])
                         original_max = int(prop['valueMax'])
-                        # 生成合理的子范围
+                        # Generate reasonable subranges
                         min_time = random.randint(original_min, original_max // 2)
                         max_time = random.randint(original_max // 2, original_max)
                         random_prop['random_value_min'] = min_time
                         random_prop['random_value_max'] = max_time
                     except (ValueError, TypeError):
-                        # 如果转换失败，使用默认范围
+                        # If the conversion fails, use the default range.
                         min_time = random.randint(10, 300)
                         max_time = random.randint(300, 600)
                         random_prop['random_value_min'] = min_time
                         random_prop['random_value_max'] = max_time
                 
-                # 对于valueMax=null的情况
+                # For the case where valueMax=null
                 elif prop.get('valueMin') and not prop.get('valueMax'):
                     try:
                         original_min = int(prop['valueMin'])
-                        # 设置合理上限，如3600秒（1小时）
+                        # Set a reasonable upper limit, such as 3600 seconds (1 hour).
                         min_time = random.randint(original_min, 1800)
                         max_time = random.randint(1800, 3600)
                         random_prop['random_value_min'] = min_time
@@ -251,7 +251,7 @@ def generate_random_value_ranges(capabilities):
                         random_prop['random_value_min'] = min_time
                         random_prop['random_value_max'] = max_time
                 
-                # 对于脉冲时间，确保值大于1秒，上限设为60秒
+                # For the pulse duration, ensure the value is greater than 1 second, and set the upper limit to 60 seconds.
                 elif 'pulse' in prop_name:
                     min_pulse = random.randint(1, 30)
                     max_pulse = random.randint(30, 60)
@@ -259,76 +259,100 @@ def generate_random_value_ranges(capabilities):
                     random_prop['random_value_max'] = max_pulse
                 
                 else:
-                    # 默认时间范围
+                    # Default time range
                     min_time = random.randint(10, 300)
                     max_time = random.randint(300, 600)
                     random_prop['random_value_min'] = min_time
                     random_prop['random_value_max'] = max_time
             
-            # 转速相关属性（如RevolutionsPerMinute）
+            # Rotation speed related attributes (such as RevolutionsPerMinute)
             elif 'revolution' in prop_name or 'rpm' in prop_name:
-                # 使用value0和value1定义的范围
+                # The range defined using value0 and value1
                 if 'value0' in prop and 'value1' in prop and prop['value0'] and prop['value1']:
                     try:
                         val0 = int(prop['value0'])
                         val1 = int(prop['value1'])
-                        # 生成合理的子范围
-                        min_rpm = random.randint(val0, (val0 + val1) // 2)
-                        max_rpm = random.randint((val0 + val1) // 2, val1)
-                        random_prop['random_value_min'] = min_rpm
-                        random_prop['random_value_max'] = max_rpm
+                        
+                        # Generate new value0 and value1
+                        new_val0 = random.randint(val0, (val0 + val1) // 2)
+                        new_val1 = random.randint((val0 + val1) // 2, val1)
+                        
+                        # Save the original value and the new random value
+                        random_prop['original_value0'] = val0
+                        random_prop['original_value1'] = val1
+                        random_prop['random_value0'] = new_val0
+                        random_prop['random_value1'] = new_val1
+                        
+                        # Add value2: a random value between 0 and 200
+                        random_prop['value2'] = random.randint(0, 200)
+                        
+                        # Set the min and max ranges for display.
+                        random_prop['random_value_min'] = min(new_val0, new_val1)
+                        random_prop['random_value_max'] = max(new_val0, new_val1)
+                        
                     except (ValueError, TypeError):
-                        # 如果转换失败，使用调整后的范围
-                        min_rpm = random.randint(80, 100)
-                        max_rpm = random.randint(100, 120)
+                        # If the conversion fails, use the adjusted range.
+                        min_rpm = random.randint(50, 100)
+                        max_rpm = random.randint(100, 150)
                         random_prop['random_value_min'] = min_rpm
                         random_prop['random_value_max'] = max_rpm
                 else:
-                    # 默认转速范围
-                    min_rpm = random.randint(80, 100)
-                    max_rpm = random.randint(100, 120)
+                    # Default speed range
+                    min_rpm = random.randint(50, 100)
+                    max_rpm = random.randint(100, 150)
                     random_prop['random_value_min'] = min_rpm
                     random_prop['random_value_max'] = max_rpm
             
-            # PWM相关属性
+            # PWM related attributes
             elif any(pwm_keyword in prop_name for pwm_keyword in ['cycle', 'duty']):
-                # 在0-100之间生成随机范围
+                # Generate a random range between 0 and 100.
                 min_pwm = random.randint(0, 50)
                 max_pwm = random.randint(50, 100)
                 random_prop['random_value_min'] = min_pwm
                 random_prop['random_value_max'] = max_pwm
             
-            # 功率相关属性
+            # Power-related attributes
             elif 'power' in prop_name:
-                # 在0-120之间生成随机范围
-                min_power = random.randint(0, 60)
-                max_power = random.randint(60, 120)
+                # 修改：生成0-120的范围，并随机选择生成子范围的方式
+                if random.choice([True, False]):
+                    # 方式一：生成0-120的范围，分为0-60和60-120
+                    min_power = random.randint(0, 60)
+                    max_power = random.randint(60, 120)
+                    random_prop['range_type'] = "0-120_watt"
+                else:
+                    # 方式二：生成0-200的范围
+                    min_power = random.randint(0, 100)
+                    max_power = random.randint(100, 200)
+                    random_prop['range_type'] = "0-200_watt"
+                
                 random_prop['random_value_min'] = min_power
                 random_prop['random_value_max'] = max_power
             
-            # 体积相关属性
+            # Volume-related properties
             elif any(volume_keyword in prop_name for volume_keyword in ['litre', 'volume']):
-                # 检查是否有约束条件
+                # Check for constraints.
                 has_volume_constraint = any(
                     constraint.get('property_constraint_value', '').startswith('>=') 
                     for constraint in prop.get('property_constraint', [])
                 )
                 
+                # Random values ​​start from 0
                 if has_volume_constraint:
-                    # 对于有约束的情况（如Volume >= 1.0），生成1.0到20.0之间的范围
+                    # For constrained cases (e.g., Volume >= 1.0), the minimum value starts from 1.0.
                     min_vol = round(random.uniform(1.0, 10.0), 2)
                     max_vol = round(random.uniform(10.0, 20.0), 2)
                 else:
-                    # 对于没有约束的情况，生成0.0到20.0之间的范围
-                    min_vol = round(random.uniform(0.0, 10.0), 2)
+                    # For cases without constraints, start from 0.0.
+                    min_vol = round(random.uniform(0.0, 10.0), 2)  
                     max_vol = round(random.uniform(10.0, 20.0), 2)
                 
                 random_prop['random_value_min'] = min_vol
                 random_prop['random_value_max'] = max_vol
+                random_prop['starts_from_zero'] = not has_volume_constraint  
             
-            # 其他属性
+            # Other attributes
             else:
-                # 对于其他属性，根据valueType和范围生成
+                # For other attributes, it is generated based on valueType and scope.
                 if 'valueMin' in prop and 'valueMax' in prop and prop['valueMin'] and prop['valueMax']:
                     try:
                         if prop.get('valueType') == 'xs:int':
@@ -383,18 +407,35 @@ def display_capabilities(capabilities):
                     print(f"       Min Value: {prop['valueMin']}")
                 if 'valueMax' in prop and prop['valueMax']:
                     print(f"       Max Value: {prop['valueMax']}")
+                
+                # 显示value0, value1, value2
                 if 'value0' in prop and prop['value0']:
                     print(f"       Value 0: {prop['value0']}")
                 if 'value1' in prop and prop['value1']:
                     print(f"       Value 1: {prop['value1']}")
+                if 'value2' in prop:
+                    print(f"       Value 2: {prop['value2']}")
                 
                 print(f"       Unit: {prop.get('property_unit', 'N/A')}")
                 
                 # 显示随机生成的值范围
                 if 'random_value_min' in prop and 'random_value_max' in prop:
-                    print(f"       Random Value Range: {prop['random_value_min']} - {prop['random_value_max']}")
-                else:
-                    print(f"       Random Value: {prop.get('random_value', 'N/A')}")
+                    range_info = f"       Random Value Range: {prop['random_value_min']} - {prop['random_value_max']}"
+                    
+                    # 添加额外的信息
+                    if prop.get('range_type'):
+                        range_info += f" ({prop['range_type']})"
+                    if prop.get('starts_from_zero'):
+                        range_info += " [starts from 0]"
+                    
+                    print(range_info)
+                
+                # 显示随机生成的value0和value1
+                if 'random_value0' in prop and 'random_value1' in prop:
+                    print(f"       Random Value 0: {prop['random_value0']}")
+                    print(f"       Random Value 1: {prop['random_value1']}")
+                    if 'original_value0' in prop and 'original_value1' in prop:
+                        print(f"       (Original: {prop['original_value0']}, {prop['original_value1']})")
                 
                 if prop.get('property_constraint'):
                     print(f"       Constraints: {prop['property_constraint']}")
@@ -404,7 +445,7 @@ def display_capabilities(capabilities):
 # Main program
 try:
     # Parse HC10 capabilities
-    print("Parsing HC10_AAS.xml file...")
+    print("Parsing HC30_AAS.xml file...")
     hc10_capabilities = parse_hc10_capabilities(file_path)
     
     # Generate random value ranges
@@ -416,9 +457,15 @@ try:
     
     # Create output data structure
     output_data = {
-        "resource: HC10_AAS": hc10_with_random
+        "resource: HC30_AAS": hc10_with_random
     }
     
+    # Save to JSON file
+    output_file = Path(file_path).parent / "hc30_capabilities_with_random.json"
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(output_data, f, indent=2, ensure_ascii=False)
+    
+    print(f"\nResults saved to: {output_file}")
 
 except FileNotFoundError:
     print(f"Error: File not found {file_path}")
