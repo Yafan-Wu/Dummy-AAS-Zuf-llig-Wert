@@ -3,17 +3,23 @@ import json
 import random
 from pathlib import Path
 
-# Only process HC10_AAS.xml file
-file_path = "/Users/yafanwu/Downloads/HC10_AAS.xml"
 
-def parse_hc10_capabilities(file_path):
+file_path = "/Users/yafanwu/Downloads/SMT4ModPlant-IECON2025/2025-04_HC10.xml"
+
+# Random seed setting
+RANDOM_SEED = 2  
+random.seed(RANDOM_SEED)  
+
+def parse_hc30_capabilities(file_path):
     tree = ET.parse(file_path)
     root = tree.getroot()
 
     ns = {'aas': 'https://admin-shell.io/aas/3/0'}
 
     capabilities = []
+    optimization_costs = None
 
+   # Analyze the CapabilityDescription submodel
     for capability_SM in root.findall(".//aas:submodel", ns):
         capability_SM_value = capability_SM.find(".//aas:value", ns)
         if capability_SM_value is not None and "https://admin-shell.io/idta/CapabilityDescription/1/0/Submodel" in capability_SM_value.text:
@@ -191,11 +197,55 @@ def parse_hc10_capabilities(file_path):
                                                 capability['realized_by'].append(realized_by_value.text)
 
                             capabilities.append(capability)
+        
+        # Analysis of the OptimizationCost sub-model
+        elif capability_SM.find("aas:idShort", ns) is not None and capability_SM.find("aas:idShort", ns).text == "OptimizationCost":
+            optimization_costs = {
+                'energy_cost': {
+                    'property_name': 'EnergyCost',
+                    'property_ID': '',
+                    'property_unit': 'EUR/kWh',
+                    'original_value': None,
+                    'random_value': None
+                },
+                'use_cost': {
+                    'property_name': 'UseCost',
+                    'property_ID': '',
+                    'property_unit': 'EUR',
+                    'original_value': None,
+                    'random_value': None
+                },
+                'co2_footprint': {
+                    'property_name': 'CO2Footprint',
+                    'property_ID': '',
+                    'property_unit': 'g CO2',
+                    'original_value': None,
+                    'random_value': None
+                }
+            }
+            
+            # 提取三个属性的值
+            for prop in capability_SM.findall(".//aas:property", ns):
+                prop_name = prop.find("aas:idShort", ns)
+                if prop_name is not None:
+                    prop_value = prop.find("aas:value", ns)
+                    
+                    if prop_name.text == "EnergyCost" and prop_value is not None:
+                        optimization_costs['energy_cost']['original_value'] = float(prop_value.text) if prop_value.text else None
+                    elif prop_name.text == "UseCost" and prop_value is not None:
+                        optimization_costs['use_cost']['original_value'] = float(prop_value.text) if prop_value.text else None
+                    elif prop_name.text == "CO2Footprint" and prop_value is not None:
+                        optimization_costs['co2_footprint']['original_value'] = float(prop_value.text) if prop_value.text else None
 
-    return capabilities
+    return capabilities, optimization_costs
 
-def generate_random_value_ranges(capabilities):
-    """Generate random value ranges for capability properties based on specific rules"""
+def generate_random_value_ranges(capabilities, optimization_costs=None, seed=None):
+    """Generate random value ranges for capability properties and optimization costs"""
+    
+    # If a seed is provided, set a random seed.
+    if seed is not None:
+        random.seed(seed)
+    
     random_capabilities = []
     
     for capability in capabilities:
@@ -313,14 +363,14 @@ def generate_random_value_ranges(capabilities):
             
             # Power-related attributes
             elif 'power' in prop_name:
-                # 修改：生成0-120的范围，并随机选择生成子范围的方式
+                # Generate a range of 0-120, and randomly select a method to generate sub-ranges.
                 if random.choice([True, False]):
-                    # 方式一：生成0-120的范围，分为0-60和60-120
+                    # Method 1: Generate a range of 0-120, divided into 0-60 and 60-120.
                     min_power = random.randint(0, 60)
                     max_power = random.randint(60, 120)
                     random_prop['range_type'] = "0-120_watt"
                 else:
-                    # 方式二：生成0-200的范围
+                    # Method 2: Generate a range of 0-200
                     min_power = random.randint(0, 100)
                     max_power = random.randint(100, 200)
                     random_prop['range_type'] = "0-200_watt"
@@ -378,13 +428,62 @@ def generate_random_value_ranges(capabilities):
         
         random_capabilities.append(random_capability)
     
-    return random_capabilities
+    # Generate a random value for OptimizationCost
+    if optimization_costs:
+        random_costs = optimization_costs.copy()
+        
+        # Generate random values ​​for energy_cost: fluctuate by ±50% around the original value, ranging from 0.1 to 2.0 EUR/kWh.
+        if random_costs['energy_cost']['original_value']:
+            original = random_costs['energy_cost']['original_value']
+            # Generates random values ​​within ±50% of the original value, but limited to 0.1-2.0.
+            min_val = max(0.1, original * 0.5)
+            max_val = min(2.0, original * 1.5)
+            random_costs['energy_cost']['random_value'] = round(random.uniform(min_val, max_val), 3)
+        else:
+            # If no original value is available, generate a reasonable random value.
+            random_costs['energy_cost']['random_value'] = round(random.uniform(0.1, 2.0), 3)
+        
+        # Generate a random value for use_cost: fluctuate within ±40% of the original value, ranging from 10 to 100 EUR.
+        if random_costs['use_cost']['original_value']:
+            original = random_costs['use_cost']['original_value']
+            # Generates random values ​​within ±40% of the original value, but limited to 10-100.
+            min_val = max(10, original * 0.6)
+            max_val = min(100, original * 1.4)
+            random_costs['use_cost']['random_value'] = round(random.uniform(min_val, max_val), 2)
+        else:
+            # If no original value is available, generate a reasonable random value.
+            random_costs['use_cost']['random_value'] = round(random.uniform(10, 100), 2)
+        
+        # Generate random values ​​for co2_footprint: fluctuate within ±60% of the original value, ranging from 20 to 200 g CO2.
+        if random_costs['co2_footprint']['original_value']:
+            original = random_costs['co2_footprint']['original_value']
+            # Generates random values ​​within ±60% of the original value, but limited to 20-200.
+            min_val = max(20, original * 0.4)
+            max_val = min(200, original * 1.6)
+            random_costs['co2_footprint']['random_value'] = round(random.uniform(min_val, max_val), 1)
+        else:
+            # If no original value is available, generate a reasonable random value.
+            random_costs['co2_footprint']['random_value'] = round(random.uniform(20, 200), 1)
+    
+    return random_capabilities, random_costs if optimization_costs else None
 
-def display_capabilities(capabilities):
+def display_capabilities(capabilities, optimization_costs=None):
     """Display capability data in terminal"""
     print("=" * 80)
-    print("HC10_AAS Capability Data (with Random Parameter Value Ranges)")
+    print("HC30_AAS Capability Data (with Random Parameter Value Ranges)")
     print("=" * 80)
+    
+    # Display optimized cost information
+    if optimization_costs:
+        print("\nOptimization Costs:")
+        print("-" * 60)
+        for cost_key, cost_info in optimization_costs.items():
+            print(f"  {cost_info['property_name']}:")
+            if cost_info.get('original_value') is not None:
+                print(f"    Original Value: {cost_info['original_value']} {cost_info['property_unit']}")
+            if cost_info.get('random_value') is not None:
+                print(f"    Random Value: {cost_info['random_value']} {cost_info['property_unit']}")
+        print("-" * 60)
     
     for i, capability in enumerate(capabilities, 1):
         cap_info = capability['capability'][0]
@@ -444,20 +543,28 @@ def display_capabilities(capabilities):
 
 # Main program
 try:
-    # Parse HC10 capabilities
-    print("Parsing HC30_AAS.xml file...")
-    hc10_capabilities = parse_hc10_capabilities(file_path)
+    # 显示当前使用的随机种子
+    print(f"Using random seed: {RANDOM_SEED}")
+    print("(Change RANDOM_SEED value for different random results)")
     
-    # Generate random value ranges
+    # Parse HC30 capabilities and optimization costs
+    print("Parsing HC30_AAS.xml file...")
+    hc30_capabilities, hc30_costs = parse_hc30_capabilities(file_path)
+    
+    # Generate random value ranges for capabilities and costs
     print("Generating random parameter value ranges...")
-    hc10_with_random = generate_random_value_ranges(hc10_capabilities)
+    hc30_with_random, random_costs = generate_random_value_ranges(hc30_capabilities, hc30_costs, seed=RANDOM_SEED)
     
     # Display in terminal
-    display_capabilities(hc10_with_random)
+    display_capabilities(hc30_with_random, random_costs)
     
     # Create output data structure
     output_data = {
-        "resource: HC30_AAS": hc10_with_random
+        "resource: HC30_AAS": {
+            "capabilities": hc30_with_random,
+            "optimization_costs": random_costs if random_costs else None,
+            "random_seed_used": RANDOM_SEED  # 保存使用的种子
+        }
     }
     
     # Save to JSON file
@@ -466,6 +573,7 @@ try:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
     
     print(f"\nResults saved to: {output_file}")
+    print(f"Random seed used: {RANDOM_SEED}")
 
 except FileNotFoundError:
     print(f"Error: File not found {file_path}")
